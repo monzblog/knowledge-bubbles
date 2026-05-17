@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Bubbles — 知識の宇宙</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #05030a;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  font-family: 'Helvetica Neue', 'Hiragino Sans', 'Yu Gothic', Arial, sans-serif;
+  user-select: none;
+}
+
+#canvas-bg {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 0;
+}
+
+#canvas-bubbles {
+  position: absolute;
+  top: 0; left: 0;
+  z-index: 1;
+}
+
+#labels {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.kw-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.4px;
+  text-align: center;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  line-height: 1.4;
+  background: rgba(4, 2, 12, 0.52);
+  border-radius: 14px;
+  padding: 6px 14px 7px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.kw-label.size-s { font-size: 15px; }
+.kw-label.size-m { font-size: 18px; }
+.kw-label.size-l { font-size: 23px; font-weight: 600; }
+.kw-label.size-xl { font-size: 28px; font-weight: 700; }
+
+.kw-word { display: block; }
+
+.kw-cat {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.55;
+  margin-top: 3px;
+  text-shadow: none;
+}
+
+/* Info Panel */
+#info-panel {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(8px);
+  background: rgba(12, 6, 22, 0.92);
+  border: 1px solid rgba(180, 140, 255, 0.25);
+  border-radius: 20px;
+  padding: 18px 28px 20px;
+  max-width: 440px;
+  min-width: 280px;
+  text-align: center;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  z-index: 200;
+}
+
+#info-panel.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: all;
+}
+
+#panel-search {
+  display: inline-block;
+  margin-top: 14px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(180, 150, 255, 0.85);
+  text-decoration: none;
+  border: 1px solid rgba(180, 150, 255, 0.3);
+  border-radius: 20px;
+  padding: 6px 18px;
+  transition: background 0.2s, color 0.2s;
+}
+#panel-search:hover {
+  background: rgba(180, 150, 255, 0.15);
+  color: rgba(220, 200, 255, 1);
+}
+
+#info-panel.visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+#panel-category {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+  color: rgba(180, 150, 255, 0.85);
+  margin-bottom: 6px;
+}
+
+#panel-keyword {
+  font-size: 20px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 10px;
+  text-shadow: 0 0 20px rgba(200, 180, 255, 0.5);
+}
+
+#panel-desc {
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(220, 210, 240, 0.75);
+}
+
+/* HUD */
+#hud {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: 20px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 150;
+  pointer-events: none;
+}
+
+#hud-title {
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.18);
+}
+
+#hud-updated {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.15);
+  text-align: right;
+}
+
+#hud-updated span {
+  display: block;
+  font-size: 9px;
+  margin-top: 2px;
+  color: rgba(180, 150, 255, 0.3);
+}
+
+/* Hint */
+#hint {
+  position: fixed;
+  bottom: 22px;
+  right: 24px;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: rgba(255,255,255,0.1);
+  z-index: 150;
+  pointer-events: none;
+}
+
+/* Music toggle */
+#music-btn {
+  position: fixed;
+  bottom: 20px;
+  left: 24px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: rgba(255,255,255,0.15);
+  cursor: pointer;
+  z-index: 150;
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  font-family: inherit;
+  transition: color 0.4s ease;
+  outline: none;
+}
+#music-btn:hover { color: rgba(255,255,255,0.45); }
+#music-btn.playing { color: rgba(180,150,255,0.45); }
+
+/* First-touch hint */
+#audio-hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  letter-spacing: 3px;
+  color: rgba(255,255,255,0.12);
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 2s ease;
+  text-transform: uppercase;
+}
+</style>
+<script src="topics.js"></script>
+</head>
+<body>
+
+<canvas id="canvas-bg"></canvas>
+<canvas id="canvas-bubbles"></canvas>
+<div id="labels"></div>
+
+<div id="hud">
+  <div id="hud-title">Knowledge Bubbles</div>
+  <div id="hud-updated">
+    Loading...
+    <span id="hud-version"></span>
+  </div>
+</div>
+
+<div id="info-panel">
+  <div id="panel-category"></div>
+  <div id="panel-keyword"></div>
+  <div id="panel-desc"></div>
+  <a id="panel-search" href="#" target="_blank" rel="noopener">Google で検索 →</a>
+</div>
+
+<div id="hint">tap to explore</div>
+<div id="audio-hint">touch anywhere to start</div>
+<button id="music-btn" aria-label="music toggle">♪ ···</button>
+<audio id="bgm" loop preload="auto"></audio>
+
+<script>
+// ─────────────────────────────────────────────
+// Canvas setup
+// ─────────────────────────────────────────────
+const bgCanvas  = document.getElementById('canvas-bg');
+const bblCanvas = document.getElementById('canvas-bubbles');
+const bgCtx     = bgCanvas.getContext('2d');
+const ctx       = bblCanvas.getContext('2d');
+const labelsDiv = document.getElementById('labels');
+
+let W = window.innerWidth;
+let H = window.innerHeight;
+
+function targetBubbleCount() {
+  const area = W * H;
+  return Math.min(Math.max(Math.floor(area / 190000), 6), 24);
+}
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+  bgCanvas.width  = bblCanvas.width  = W;
+  bgCanvas.height = bblCanvas.height = H;
+  drawStars();
+  adjustBubbleCount();
+}
+
+window.addEventListener('resize', resize);
+
+// ─────────────────────────────────────────────
+// Stars
+// ─────────────────────────────────────────────
+function drawStars() {
+  bgCtx.fillStyle = '#05030a';
+  bgCtx.fillRect(0, 0, W, H);
+  const count = Math.floor(W * H / 6000);
+  for (let i = 0; i < count; i++) {
+    const x  = Math.random() * W;
+    const y  = Math.random() * H;
+    const r  = Math.random() * 1.0;
+    const op = Math.random() * 0.45 + 0.05;
+    bgCtx.beginPath();
+    bgCtx.arc(x, y, r, 0, Math.PI * 2);
+    bgCtx.fillStyle = `rgba(255,255,255,${op})`;
+    bgCtx.fill();
+  }
+}
+
+// ─────────────────────────────────────────────
+// Color palettes  (r, g, b)
+// ─────────────────────────────────────────────
+const PALETTES = [
+  [255, 155, 190],   // pink
+  [175, 135, 255],   // violet
+  [130, 215, 195],   // mint
+  [150, 195, 255],   // sky
+  [255, 210, 130],   // gold
+  [200, 255, 165],   // lime
+  [255, 170, 130],   // peach
+  [130, 200, 255],   // cyan
+  [240, 155, 255],   // magenta
+  [155, 240, 200],   // seafoam
+];
+
+// ─────────────────────────────────────────────
+// Bubble count adjustment on resize
+// ─────────────────────────────────────────────
+function adjustBubbleCount() {
+  if (allTopics.length === 0) return;
+  const target = Math.min(targetBubbleCount(), allTopics.length);
+  const current = bubbles.length;
+  if (current < target) {
+    for (let i = 0; i < target - current; i++) {
+      setTimeout(() => { if (allTopics.length > 0) spawnBubble(); }, i * 250);
+    }
+  } else if (current > target + 2) {
+    const toKill = current - target;
+    for (let i = 0; i < toKill; i++) {
+      setTimeout(() => {
+        if (bubbles.length <= target) return;
+        const idx = Math.floor(Math.random() * bubbles.length);
+        const b = bubbles[idx];   // splice AFTER fade
+        b.kill(() => {
+          const i = bubbles.indexOf(b);
+          if (i !== -1) bubbles.splice(i, 1);
+        });
+      }, i * 600);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// Bubble class
+// ─────────────────────────────────────────────
+let bubbles = [];
+let allTopics = [];
+const usedSet = new Set();
+
+class Bubble {
+  constructor(topic) {
+    this.topic   = topic;
+    this.r       = 26 + (topic.weight || 5) * 8;      // 34-106 px by weight
+    this.x       = Math.random() * (W - this.r * 4) + this.r * 2;
+    this.y       = Math.random() * (H - this.r * 4) + this.r * 2;
+    this.vx      = (Math.random() - 0.5) * 0.35;
+    this.vy      = (Math.random() - 0.5) * 0.35;
+    this.phase   = Math.random() * Math.PI * 2;
+    this.phaseV  = Math.random() * 0.007 + 0.003;
+    this.palette = PALETTES[Math.floor(Math.random() * PALETTES.length)];
+    this.alpha   = 0;
+    this.target  = 1;
+    this.dying   = false;
+    this.labelEl = null;
+    this._createLabel();
+  }
+
+  _createLabel() {
+    const el = document.createElement('div');
+    el.className = 'kw-label';
+    if      (this.r > 72) el.classList.add('size-xl');
+    else if (this.r > 58) el.classList.add('size-l');
+    else if (this.r > 42) el.classList.add('size-m');
+    else                  el.classList.add('size-s');
+    const [r, g, b] = this.palette;
+    el.innerHTML = `<span class="kw-word">${this.topic.keyword}</span><span class="kw-cat">${this.topic.category}</span>`;
+    el.style.color      = `rgb(${r},${g},${b})`;
+    el.style.textShadow = `0 0 10px rgba(${r},${g},${b},0.7)`;
+    el.style.opacity    = '0';
+    el.addEventListener('click', () => {
+      const query = encodeURIComponent(this.topic.keyword + ' ' + this.topic.category + ' とは');
+      window.open('https://www.google.com/search?q=' + query, '_blank', 'noopener');
+    });
+    labelsDiv.appendChild(el);
+    this.labelEl = el;
+  }
+
+  _showInfo() {
+    const panel = document.getElementById('info-panel');
+    document.getElementById('panel-category').textContent = this.topic.category;
+    document.getElementById('panel-keyword').textContent  = this.topic.keyword;
+    const tags = (this.topic.tags || []).map(t => '#' + t).join('  ');
+    document.getElementById('panel-desc').textContent = tags;
+    const query = encodeURIComponent(this.topic.keyword + ' ' + this.topic.category + ' とは');
+    document.getElementById('panel-search').href = 'https://www.google.com/search?q=' + query;
+    panel.classList.add('visible');
+    clearTimeout(window._panelTimer);
+    window._panelTimer = setTimeout(() => panel.classList.remove('visible'), 6000);
+  }
+
+  update() {
+    // Fade
+    const speed = this.dying ? 0.007 : 0.010;
+    this.alpha += (this.target - this.alpha) * speed;
+
+    // Drift
+    this.phase += this.phaseV;
+    const pulse = 1 + Math.sin(this.phase) * 0.035;
+    this.x += this.vx;
+    this.y += this.vy;
+
+    // Boundary bounce — extra bottom clearance for info panel
+    const pad    = this.r * 1.8;
+    const botPad = Math.max(pad, 140);
+    if (this.x < pad)          { this.vx =  Math.abs(this.vx); }
+    if (this.x > W - pad)      { this.vx = -Math.abs(this.vx); }
+    if (this.y < pad)          { this.vy =  Math.abs(this.vy); }
+    if (this.y > H - botPad)   { this.vy = -Math.abs(this.vy); }
+
+    // Gentle repulsion between bubbles
+    for (const b of bubbles) {
+      if (b === this) continue;
+      const dx = this.x - b.x;
+      const dy = this.y - b.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minDist = (this.r + b.r) * 1.35;
+      if (dist < minDist && dist > 0) {
+        const force = (minDist - dist) / minDist * 0.028;
+        this.vx += (dx / dist) * force;
+        this.vy += (dy / dist) * force;
+      }
+    }
+
+    // Speed cap
+    const spd = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+    if (spd > 0.6) { this.vx *= 0.6 / spd; this.vy *= 0.6 / spd; }
+
+    // Sync label
+    if (this.labelEl) {
+      this.labelEl.style.left    = this.x + 'px';
+      this.labelEl.style.top     = this.y + 'px';
+      this.labelEl.style.opacity = this.alpha;
+      if (this.dying && this.alpha < 0.02) {
+        this.labelEl.parentNode && this.labelEl.parentNode.removeChild(this.labelEl);
+        this.labelEl = null;
+      }
+    }
+    if (this.dying && this.alpha < 0.02 && this._killCallback) {
+      this._killCallback();
+      this._killCallback = null;
+    }
+
+    return pulse;
+  }
+
+  draw(pulse) {
+    const [r, g, b] = this.palette;
+    const a = this.alpha;
+    const R = this.r * pulse;
+    const cx = this.x;
+    const cy = this.y;
+
+    // Outer diffuse glow
+    const og = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 2.2);
+    og.addColorStop(0,   `rgba(${r},${g},${b},${0.20 * a})`);
+    og.addColorStop(0.5, `rgba(${r},${g},${b},${0.08 * a})`);
+    og.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = og;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main body
+    const hx = cx - R * 0.18;
+    const hy = cy - R * 0.18;
+    const mg = ctx.createRadialGradient(hx, hy, 0, cx, cy, R);
+    mg.addColorStop(0,   `rgba(${r},${g},${b},${0.72 * a})`);
+    mg.addColorStop(0.38,`rgba(${r},${g},${b},${0.42 * a})`);
+    mg.addColorStop(0.72,`rgba(${r},${g},${b},${0.14 * a})`);
+    mg.addColorStop(1,   `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = mg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Specular highlight (top-left)
+    const hg = ctx.createRadialGradient(cx - R*0.3, cy - R*0.3, 0, cx - R*0.3, cy - R*0.3, R * 0.55);
+    hg.addColorStop(0,   `rgba(255,255,255,${0.38 * a})`);
+    hg.addColorStop(0.5, `rgba(255,255,255,${0.10 * a})`);
+    hg.addColorStop(1,   `rgba(255,255,255,0)`);
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.arc(cx - R*0.3, cy - R*0.3, R * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Core bright center
+    const cg = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.38);
+    cg.addColorStop(0,   `rgba(255,255,255,${0.55 * a})`);
+    cg.addColorStop(0.6, `rgba(255,255,255,${0.08 * a})`);
+    cg.addColorStop(1,   `rgba(255,255,255,0)`);
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R * 0.38, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  kill(callback) {
+    this.dying = true;
+    this.target = 0;
+    this._killCallback = callback;
+  }
+}
+
+// ─────────────────────────────────────────────
+// Topic management
+// ─────────────────────────────────────────────
+function pickTopic() {
+  const available = allTopics.filter((_, i) => !usedSet.has(i));
+  if (available.length === 0) usedSet.clear();
+  const pool = allTopics.filter((_, i) => !usedSet.has(i));
+  const idx  = Math.floor(Math.random() * pool.length);
+  const globalIdx = allTopics.indexOf(pool[idx]);
+  usedSet.add(globalIdx);
+  return pool[idx];
+}
+
+function spawnBubble(topic) {
+  const b = new Bubble(topic || pickTopic());
+  bubbles.push(b);
+  return b;
+}
+
+function swapRandomBubble() {
+  if (bubbles.length === 0) return;
+  const idx = Math.floor(Math.random() * bubbles.length);
+  const dying = bubbles[idx];   // splice AFTER fade, not before
+  dying.kill(() => {
+    const i = bubbles.indexOf(dying);
+    if (i !== -1) bubbles.splice(i, 1);
+    if (bubbles.length < targetBubbleCount() && allTopics.length > 0) {
+      setTimeout(() => spawnBubble(), 400 + Math.random() * 600);
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// Connection lines between related visible bubbles
+// ─────────────────────────────────────────────
+function drawConnections() {
+  for (let i = 0; i < bubbles.length; i++) {
+    const a = bubbles[i];
+    if (a.alpha < 0.1) continue;
+    for (let j = i + 1; j < bubbles.length; j++) {
+      const b = bubbles[j];
+      if (b.alpha < 0.1) continue;
+      const aTags = a.topic.tags || [];
+      const bTags = b.topic.tags || [];
+      const shared = aTags.filter(t => bTags.includes(t)).length;
+      if (shared === 0) continue;
+      const opacity = Math.min(0.14 + shared * 0.12, 0.45) * Math.min(a.alpha, b.alpha);
+      const [ar, ag, ab_] = a.palette;
+      const [br, bg, bb_] = b.palette;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.strokeStyle = `rgba(${Math.round((ar+br)/2)},${Math.round((ag+bg)/2)},${Math.round((ab_+bb_)/2)},${opacity})`;
+      ctx.lineWidth = 1.2 + shared * 0.6;
+      ctx.stroke();
+    }
+  }
+}
+
+// ─────────────────────────────────────────────
+// Render loop
+// ─────────────────────────────────────────────
+function frame() {
+  ctx.clearRect(0, 0, W, H);
+  drawConnections();
+  // snapshot array — callbacks inside update() may splice bubbles
+  for (const b of [...bubbles]) {
+    const pulse = b.update();
+    b.draw(pulse);
+  }
+  requestAnimationFrame(frame);
+}
+
+
+// ─────────────────────────────────────────────
+// Swap scheduler — organic random timing
+// ─────────────────────────────────────────────
+function scheduleNextSwap() {
+  const roll = Math.random();
+  let delay;
+  if (roll < 0.15)      delay = 2000  + Math.random() * 2000;  // quick flash: 2-4s
+  else if (roll < 0.60) delay = 5000  + Math.random() * 7000;  // normal: 5-12s
+  else                  delay = 14000 + Math.random() * 10000; // slow linger: 14-24s
+  setTimeout(() => {
+    swapRandomBubble();
+    if (roll < 0.12) {
+      setTimeout(swapRandomBubble, 800 + Math.random() * 1200); // burst: two at once
+    }
+    scheduleNextSwap();
+  }, delay);
+}
+
+// ─────────────────────────────────────────────
+// Auto spotlight — shows one bubble's info automatically
+// ─────────────────────────────────────────────
+function startAutoSpotlight() {
+  function cycle() {
+    const visible = bubbles.filter(b => b.alpha > 0.55 && !b.dying);
+    if (visible.length > 0) {
+      const b = visible[Math.floor(Math.random() * visible.length)];
+      b._showInfo();
+    }
+    const next = 5000 + Math.random() * 5000;
+    setTimeout(cycle, next);
+  }
+  setTimeout(cycle, 3500);
+}
+
+// ─────────────────────────────────────────────
+// Data loading
+// ─────────────────────────────────────────────
+function loadTopics() {
+  document.getElementById('hud-version').textContent = window.TOPICS_DB.length + ' words';
+  return window.TOPICS_DB.map(([k, c, w, t]) => ({
+    keyword: k, category: c, weight: w,
+    tags: t ? t.split(' ') : []
+  }));
+}
+
+// ─────────────────────────────────────────────
+// Init
+// ─────────────────────────────────────────────
+function init() {
+  resize();
+  allTopics = loadTopics();
+
+  const initialCount = Math.min(targetBubbleCount(), allTopics.length);
+  for (let i = 0; i < initialCount; i++) {
+    const delay = i * 180 + Math.random() * 120;
+    setTimeout(() => spawnBubble(), delay);
+  }
+
+  // Start swap cycle after initial burst
+  setTimeout(scheduleNextSwap, 12000);
+
+  frame();
+}
+
+init();
+
+// ─────────────────────────────────────────────
+// Background music — playlist
+// ★ ここにMP3ファイル名を追加してください ★
+// ─────────────────────────────────────────────
+const PLAYLIST = [
+  'Clear_Aperture.mp3',
+  'Architecture_of_Light.mp3',
+  'The_High_Vault.mp3',
+  '時を縫う.mp3',
+];
+const TRACK_SWITCH_MS = 30 * 60 * 1000; // 30分
+
+const bgm       = document.getElementById('bgm');
+const musicBtn  = document.getElementById('music-btn');
+const audioHint = document.getElementById('audio-hint');
+let audioStarted = false;
+const TARGET_VOL = 0.3;
+
+// シャッフル済み再生順を管理
+let playOrder = [];
+let playOrderIdx = 0;
+function nextTrack() {
+  if (playOrderIdx >= playOrder.length) {
+    // デッキを作り直してシャッフル
+    playOrder = [...PLAYLIST].sort(() => Math.random() - 0.5);
+    playOrderIdx = 0;
+  }
+  return playOrder[playOrderIdx++];
+}
+
+let _fadeId = null;
+function fadeVolume(from, to, ms) {
+  clearInterval(_fadeId);
+  const steps = 50;
+  const dt    = ms / steps;
+  const dv    = (to - from) / steps;
+  let   step  = 0;
+  _fadeId = setInterval(() => {
+    step++;
+    bgm.volume = Math.min(Math.max(from + dv * step, 0), 1);
+    if (step >= steps) clearInterval(_fadeId);
+  }, dt);
+}
+
+// src をセットして canplay を待ってから再生
+function loadAndPlay(src, onSuccess) {
+  bgm.src = src;
+  bgm.volume = 0;
+
+  const cleanup = () => {
+    bgm.removeEventListener('canplay', onCanPlay);
+    bgm.removeEventListener('error',   onError);
+  };
+  const onCanPlay = () => {
+    cleanup();
+    bgm.play().then(onSuccess).catch(() => {
+      // ブラウザがブロックした場合は少し待って再試行
+      setTimeout(() => bgm.play().then(onSuccess).catch(() => {}), 800);
+    });
+  };
+  const onError = () => {
+    cleanup();
+    console.warn('BGM load error:', src);
+    // 次のトラックへスキップ
+    setTimeout(() => loadAndPlay(nextTrack(), onSuccess), 1000);
+  };
+
+  bgm.addEventListener('canplay', onCanPlay);
+  bgm.addEventListener('error',   onError);
+  bgm.load();
+}
+
+function switchTrack() {
+  if (!audioStarted || bgm.paused) return;
+  const next = nextTrack();
+  const FADE = 3000;
+  fadeVolume(bgm.volume, 0, FADE);
+  setTimeout(() => {
+    loadAndPlay(next, () => fadeVolume(0, TARGET_VOL, FADE));
+  }, FADE + 200);
+}
+
+// 30分ごとに次のトラックへ
+let trackTimer = null;
+function scheduleTrackSwitch() {
+  clearTimeout(trackTimer);
+  trackTimer = setTimeout(() => {
+    switchTrack();
+    scheduleTrackSwitch();
+  }, TRACK_SWITCH_MS);
+}
+
+function startAudio() {
+  if (audioStarted) return;
+  audioStarted = true;
+  audioHint.style.opacity = '0';
+  loadAndPlay(nextTrack(), () => {
+    fadeVolume(0, TARGET_VOL, 3000);
+    musicBtn.textContent = '♪ on';
+    musicBtn.classList.add('playing');
+    scheduleTrackSwitch();
+  });
+}
+
+musicBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!audioStarted) {
+    startAudio();
+  } else if (bgm.paused) {
+    bgm.play();
+    fadeVolume(bgm.volume, TARGET_VOL, 1500);
+    musicBtn.textContent = '♪ on';
+    musicBtn.classList.add('playing');
+    scheduleTrackSwitch();
+  } else {
+    fadeVolume(bgm.volume, 0, 1500);
+    setTimeout(() => bgm.pause(), 1500);
+    musicBtn.textContent = '♪ off';
+    musicBtn.classList.remove('playing');
+    clearTimeout(trackTimer);
+  }
+});
+
+document.addEventListener('click', startAudio, { once: true });
+document.addEventListener('touchstart', startAudio, { once: true });
+</script>
+</body>
+</html>
